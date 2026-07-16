@@ -998,6 +998,10 @@ Int_t QwBeamLine::LoadInputParameters(TString pedestalfile)
 /** Randomize event data for all managed devices for mock runs. */
 void QwBeamLine::RandomizeEventData(int helicity, double time)
 {
+	Double_t Xtrimcoefficient = 1; //dummy practice value
+	Double_t Xptrimcoefficient = 1.5e-2; //dummy practice value
+	Double_t Xkick, Xpkick, rampvalue, trimvalue;
+
   // Randomize all QwBPMStripline buffers
   for (size_t i = 0; i < fStripline.size(); i++)
   {
@@ -1010,9 +1014,32 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
 
   // Randomize all QwBCM buffers
   for (size_t i = 0; i < fBCM.size(); i++)
-  {
-    fBCM[i].get()->RandomizeEventData(helicity, time);
-    //    fBCM[i].get()->PrintInfo();
+  {	
+   
+   	fBCM[i].get()->RandomizeEventData(helicity, time);
+    //fBCM[i].get()->PrintInfo(); 
+         
+   	//-------------------Beam modulation: modulate ramp and trim cards----------------------
+   // if(time == 1000){
+   trimvalue = 1;  
+    	//std::cout << fBCM[i].get()->GetElementName() << std::endl;
+    	if(fBCM[i].get()->GetElementName().Contains("bmod_ramp")){
+    		rampvalue = fBCM[i].get()->GetValue();
+    		rampvalue = 100.0; //100 is a dummy practice value, should be calculated based on a sine curve (or does ramp follow trim?)
+    		fBCM[i].get()->SetRandomEventParameters(rampvalue, fBCM[i].get()->GetValueWidth());
+    	}
+    	if(fBCM[i].get()->GetElementName().Contains("bmod_trim1")){
+    		 // 130 is a practice dummy, should be related to the ramp value (or does ramp follow trim?)
+     		fBCM[i].get()->SetRandomEventParameters(trimvalue, fBCM[i].get()->GetValueWidth());
+     		//trimvalue = fBCM[i].get()->GetValue();
+     	}
+     //}
+     fBCM[i].get()->RandomizeEventData(helicity, time);
+     //-------------------Beam modulation: end the code crimes (for now)---------------------
+  
+  
+    if(fBCM[i].get()->GetElementName().Contains("bmod_trim1")){std::cout << fBCM[i].get()->GetValue() << std::endl;}
+
   }
 
   // Randomize all QwHaloMonitor buffers
@@ -1033,16 +1060,33 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
   for (size_t i=0; i<fBPMCombo.size(); i++){
     fBPMCombo[i].get()->RandomizeEventData(helicity, time);
     //fBPMCombo[i].get()->PrintValue();
+    
+    //-------------------Beam modulation II: code crimes continue----------------------------
+    Xkick = trimvalue*Xtrimcoefficient;
+    Xpkick = trimvalue*Xptrimcoefficient; //not sure what to do with this right now
+    
+    //back propogate beam position to fBPMs???? how do i use the Xkick to shift x beam position????
+		
+		//std::cout << "Xkick " << Xkick << std::endl;
+		//std::cout << "Xpkick " << Xpkick << std::endl;
+		
+		fBPMCombo[i].get()->addMockOffset(1,Xkick);
+		//fBPMCombo[i].get()->addMockOffset(3,Xpkick);
+		
+		fBPMCombo[i].get()->reCalcIntercept();
+    //------------------ Beam modulation: end the code crimes--------------------------------
+    
     for (size_t j=0; j<fBPMCombo[i].get()->GetNumberOfElements(); j++){
       VQwBPM * bpm = GetBPMStripline(fBPMCombo[i].get()->GetSubElementName(j));
+      //bpm->fAbsPos[0]->AddChannelOffset(Xkick);
       if (bpm){
         fBPMCombo[i].get()->GetProjectedPosition(bpm);
 //  print the bpm device name, and get the x and y and z? values and print them
-//      std::cout << "bpm " << bpm->GetElementName() << std::endl;
-//      std::cout << "xpos= " << bpm->GetPosition(VQwBPM::kXAxis) << std::endl;
-//      std::cout << "ypos= " << bpm->GetPosition(VQwBPM::kYAxis) << std::endl;
-//      std::cout << "zpos= " << bpm->GetPosition(VQwBPM::kZAxsi) << std::endl;
-//        bpm->PrintInfo();
+      //std::cout << "bpm " << bpm->GetElementName() << std::endl;
+      //std::cout << "xpos= " << bpm->GetPosition(VQwBPM::kXAxis) << std::endl;
+      //std::cout << "ypos= " << bpm->GetPosition(VQwBPM::kYAxis) << std::endl;
+      //std::cout << "zpos= " << bpm->GetPosition(VQwBPM::kZAxis) << std::endl;
+        //bpm->PrintInfo();
         //  Call the new function in stripline class to fill all internal variables from the fAbsPos for the bpm object
       }
     }
