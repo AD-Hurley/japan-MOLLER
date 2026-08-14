@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <cstdio>
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 std::string QwRootFile::fDefaultRootFileDir = ".";
 std::string QwRootFile::fDefaultRootFileStem = "Qweak_";
 
@@ -66,8 +69,8 @@ QwRootFile::QwRootFile(const TString& run_label)
       + Form("/%s%s.root", fRootFileStem.Data(), run_label.Data());
     if (fUseTemporaryFile){
       rootfilename += Form("/%s%s.%s.%d.root",
-			   fRootFileStem.Data(), run_label.Data(),
-			   hostname.Data(), pid);
+                           fRootFileStem.Data(), run_label.Data(),
+                           hostname.Data(), pid);
       // Delete permanent file if it exists to prevent accumulation across segments
       if (gSystem->AccessPathName(fPermanentName.Data()) == 0) {
         QwVerbose << "Removing existing permanent file: " << fPermanentName << QwLog::endl;
@@ -111,7 +114,7 @@ QwRootFile::QwRootFile(const TString& run_label)
       return;
     } else {
       QwMessage << "Opened "<< (fUseTemporaryFile?"temporary ":"")
-		<<"rootfile " << rootfilename << QwLog::endl;
+                <<"rootfile " << rootfilename << QwLog::endl;
     }
 
     TString run_condition_name = Form("condition_%s", run_label.Data());
@@ -164,23 +167,23 @@ QwRootFile::~QwRootFile()
     const char* action;
     if (fUseTemporaryFile){
       if (fMakePermanent) {
-	// Delete existing permanent file first to avoid accumulation
-	if (gSystem->AccessPathName(fPermanentName.Data()) == 0) {
-	  remove(fPermanentName.Data());
-	}
-	action = " rename ";
-	err = rename( rootfilename.Data(), fPermanentName.Data() );
+        // Delete existing permanent file first to avoid accumulation
+        if (gSystem->AccessPathName(fPermanentName.Data()) == 0) {
+          remove(fPermanentName.Data());
+        }
+        action = " rename ";
+        err = rename( rootfilename.Data(), fPermanentName.Data() );
       } else {
-	action = " remove ";
-	err = remove( rootfilename.Data() );
+        action = " remove ";
+        err = remove( rootfilename.Data() );
       }
       // It'd be proper to "extern int errno" and strerror() here,
       // but that doesn't seem very C++-ish.
       if (err) {
-	QwWarning << "Couldn't" << action << rootfilename << QwLog::endl;
+        QwWarning << "Couldn't" << action << rootfilename << QwLog::endl;
       } else {
-	QwMessage << "Was able to" << action << rootfilename << QwLog::endl;
-	QwMessage << "Root file is " << fPermanentName << QwLog::endl;
+        QwMessage << "Was able to" << action << rootfilename << QwLog::endl;
+        QwMessage << "Root file is " << fPermanentName << QwLog::endl;
       }
     }
   }
@@ -307,6 +310,13 @@ void QwRootFile::ProcessOptions(QwOptions &options)
 {
   // Option 'rootfiles' to specify ROOT files dir
   fRootFileDir = TString(options.GetValue<std::string>("rootfiles"));
+  fs::path tmppath(fRootFileDir.Data());
+  if( ! fs::exists(tmppath) || ! fs::is_directory(tmppath)) {
+    QwError << "ERROR:  The rootfile directory path, " << fRootFileDir
+            << ", does not exist.  Exiting."
+            << QwLog::endl;
+    exit(2);
+  }
 
   // Option 'root-stem' to specify ROOT file stem
   fRootFileStem = TString(options.GetValue<std::string>("rootfile-stem"));
@@ -349,19 +359,37 @@ void QwRootFile::ProcessOptions(QwOptions &options)
   if (options.GetValue<bool>("disable-trees"))  DisableTree(".*");
   if (options.GetValue<bool>("disable-histos")) DisableHisto(".*");
 
-  // In TMapFile mode there is no on-disk TFile (the constructor opens only
-  // fMapFile), so every TTree created via NewTree() lives inside the 1 GiB
-  // mmap region.  TMapFile::Update() then re-streams all basket state via
-  // CustomReAlloc2 and aborts as soon as the cumulative basket size grows
-  // past the mmap.  TMapFile was designed for live histogram monitoring,
-  // not tree storage, so silently disable trees in that mode.
-  if (fEnableMapFile) {
+  // Read --circular-buffer up front so the mapfile-mode logic below can use
+  // it (the original ProcessOptions read it further down, but we now need
+  // it during the mapfile-tree decision).
+  fCircularBufferSize = options.GetValue<int>("circular-buffer");
+
+  // TMapFile-mode tree publishing.
+  //
+  // TTrees can be published into the mapfile: TDirectoryFile::Append
+  // auto-calls TMapFile::Add() when the directory's mother is a TMapFile,
+  // so a TTree created while gDirectory == fMapFile->GetDirectory()
+  // becomes a TMapRec on its own.  TMapFile::Update() then re-streams the
+  // tree (header + baskets) into the 1 GiB mmap on every interval.
+  //
+  // The hazard is that an unbounded TTree's serialized size grows
+  // monotonically and CustomReAlloc2 aborts as soon as it overruns the
+  // mmap.  TTree::SetCircular(N) caps the in-memory entry count, which
+  // caps the serialized size.  Require a non-zero circular buffer in
+  // mapfile mode; if the user did not pass one, force a safe default
+  // and warn loudly rather than silently dropping all trees.
+  if (fEnableMapFile && fCircularBufferSize == 0) {
+    const UInt_t kMapFileCircularDefault = 100;
     QwMessage << QwLog::endl;
-    QwMessage << "QwRootFile::ProcessOptions:  "
-              << "--enable-mapfile is set; disabling tree output "
-                 "(TMapFile cannot host TTree baskets; histograms only)."
+    QwWarning << "QwRootFile::ProcessOptions:  "
+              << "--enable-mapfile requires a bounded TTree to avoid "
+                 "overrunning the " << (kMaxMapFileSize >> 20)
+              << " MiB mmap region.  "
+                 "Forcing --circular-buffer=" << kMapFileCircularDefault
+              << " (pass --circular-buffer=N to override; pass "
+                 "--disable-trees to suppress tree output entirely)."
               << QwLog::endl;
-    DisableTree(".*");
+    fCircularBufferSize = kMapFileCircularDefault;
   }
 
 #ifdef HAS_RNTUPLE_SUPPORT
@@ -400,7 +428,6 @@ void QwRootFile::ProcessOptions(QwOptions &options)
   fNumHelEventsToSkip = options.GetValue<int>("num-mps-discarded-events");
 
   // Update interval for the map file
-  fCircularBufferSize = options.GetValue<int>("circular-buffer");
   fUpdateInterval = options.GetValue<int>("mapfile-update-interval");
   fCompressionAlgorithm = options.GetValue<int>("compression-algorithm");
   fCompressionLevel = options.GetValue<int>("compression-level");
