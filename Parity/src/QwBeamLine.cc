@@ -1028,6 +1028,7 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
     		rampvalue = 100.0; //100 is a dummy practice value, should be calculated based on a sine curve (or does ramp follow trim?)
     		fBCM[i].get()->SetRandomEventParameters(rampvalue, fBCM[i].get()->GetValueWidth());
     	}
+    	//testing by changing only trim1
     	if(fBCM[i].get()->GetElementName().Contains("bmod_trim1")){
     		 // 130 is a practice dummy, should be related to the ramp value (or does ramp follow trim?)
      		fBCM[i].get()->SetRandomEventParameters(trimvalue, fBCM[i].get()->GetValueWidth());
