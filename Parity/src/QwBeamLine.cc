@@ -1013,6 +1013,7 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
     fCavity[i].RandomizeEventData(helicity, time);
 
   // Randomize all QwBCM buffers
+  QwTargetTrimResponse *fTrimResponseMatrix = new QwTargetTrimResponse();
   for (size_t i = 0; i < fBCM.size(); i++)
   {	
    
@@ -1039,19 +1040,28 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
      //-------------------Beam modulation: end the code crimes (for now)---------------------
   
   
-    if(fBCM[i].get()->GetElementName().Contains("bmod_trim1")){std::cout << fBCM[i].get()->GetValue() << std::endl;}
-
+  
+    if(fBCM[i].get()->GetElementName().Contains("bmod_trim")){
+		
+			fTrimResponseMatrix->SetElementName(fBCM[i].get()->GetElementName());
+    	fTrimResponseMatrix->LoadMockDataParameters();
+    	//std::cout << "bcm " << fTrimResponseMatrix->GetElementName() << " has matrix elements of " << fTrimResponseMatrix->GetTMatrixElement(0) << ", " << fTrimResponseMatrix->GetTMatrixElement(1) << ", " << fTrimResponseMatrix->GetTMatrixElement(2) << ", " << fTrimResponseMatrix->GetTMatrixElement(3) << ", " << fTrimResponseMatrix->GetTMatrixElement(4) << std::endl;
+    }
+    
   }
 
   // Randomize all QwHaloMonitor buffers
   //for (size_t i = 0; i < fHaloMonitor.size(); i++)
     //fHaloMonitor[i].RandomizeEventData(helicity, time);
-
+    
+	
 //-------------------------------------------------------------------------------------------
   for(size_t i=0;i<fBCMCombo.size();i++){
     fBCMCombo[i].get()->RandomizeEventData(helicity, time);
     for (size_t j=0; j<fBCMCombo[i].get()->GetNumberOfElements(); j++){
       VQwBCM * bcm = GetBCM(fBCMCombo[i].get()->GetSubElementName(j));
+      
+      
       if (bcm){
         fBCMCombo[i].get()->GetProjectedCharge(bcm);
       }
@@ -1075,10 +1085,23 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
 		//fBPMCombo[i].get()->addMockOffset(3,Xpkick);
 		
 		fBPMCombo[i].get()->reCalcIntercept();
-    //------------------ Beam modulation: end the code crimes--------------------------------
+
+		QwBPMTansferMatrix *fTransferMatrix = new QwBPMTansferMatrix();
+		//std::cout << "Number of bpm in combo = " << fBPMCombo[i].get()->GetNumberOfElements() << std::endl;
+		
+		
+    //-------------------Beam modulation: end the code crimes--------------------------------
     
     for (size_t j=0; j<fBPMCombo[i].get()->GetNumberOfElements(); j++){
       VQwBPM * bpm = GetBPMStripline(fBPMCombo[i].get()->GetSubElementName(j));
+      
+      //-------Beam modulation III: Revenge of the Crimes (test parameter file read in)-------
+      fTransferMatrix->SetElementName(bpm->GetElementName());
+      fTransferMatrix->LoadMockDataParameters();
+      
+      //std::cout << "bpm " << fTransferMatrix->GetElementName() << " has non-zero transfer matrix elements of " << fTransferMatrix->GetTMatrixElement(0) << " and " << fTransferMatrix->GetTMatrixElement(1) << std::endl;
+      //-------------------Beam modulation: end the code crimes-------------------------------
+  
       //bpm->fAbsPos[0]->AddChannelOffset(Xkick);
       if (bpm){
         fBPMCombo[i].get()->GetProjectedPosition(bpm);
