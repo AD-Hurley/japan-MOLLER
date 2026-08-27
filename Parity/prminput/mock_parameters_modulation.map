@@ -1,0 +1,17 @@
+!Target BPM Response to trim card values
+!device_type,	!device_name,	X,			Y,			Y,			Y'		E
+bmodtargetresponse,	bmod_trim1,		-1.00,	0.100,	0.800,	0.05	0.000
+bmodtargetresponse,	bmod_trim2,		0.150,	1.000,	0.100,	-0.90	0.000
+bmodtargetresponse,	bmod_trim3,		-0.80,	-0.15,	-1.00,	0.10	0.000
+bmodtargetresponse,	bmod_trim4,		0.050,	0.900,	0.050,	1.00	0.000
+bmodtargetresponse,	bmod_trim5,		1.200,	0.200,	0.500,	0.10	0.000
+bmodtargetresponse,	bmod_trim6,		0.200,	-1.10,	0.100,	0.60	0.000
+bmodtargetresponse,	bmod_trim7,		0.600,	0.050,	0.300,	0.05	0.000
+
+
+!BPM Transfer Matricies
+!device_type,	device_name,	diagonal,								(0,1) & (2,3)
+bpmtransfer,	bpm1h04,			1.000000000000000e00,	1.491388002000000e01
+bpmtransfer,	bpm1h05,			1.000000000000000e00,	1.360797002000000e01
+bpmtransfer,	bpm1h11,			1.000000000000000e00,	5.060830020000001e00
+bpmtransfer,	bpm1h14,			1.000000000000000e00,	2.104840000000000e00
