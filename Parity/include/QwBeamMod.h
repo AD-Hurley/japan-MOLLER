@@ -31,7 +31,30 @@ class QwBeamMod;
 
 // this emun vector needs to be coherent with the DetectorTypes declaration in the QwBeamLine constructor
 
+class QwBPMTansferMatrix {
+	public:
+		QwBPMTansferMatrix(){};
+		~QwBPMTansferMatrix(){};
+		TString GetElementName();
+		Double_t GetTMatrixElement(Int_t i);
+		void LoadMockDataParameters();
+		void SetElementName(TString bpmName);
+		void SetTMatrixElement(Int_t i, Double_t value);
+	protected:
+	private:
+		TString name = "unknown";
+		Double_t TMatrixElement[2] = {0,0};
+}; 
 
+class QwTargetTrimResponse : public QwBPMTansferMatrix{
+	public:
+		QwTargetTrimResponse(){};
+		~QwTargetTrimResponse(){};
+	protected:
+	private:
+		TString name = "unknown";
+		Double_t TMatrixElement[5] = {1,1,1,1,1};
+}; 
 
 /*****************************************************************
 *  Class:
@@ -91,6 +114,8 @@ class QwModChannelID
  * Decodes modulation ramp and pattern words, maintains channels affected
  * by modulation, and computes relevant summaries for regression.
  */
+
+ 
 class QwBeamMod: public VQwSubsystemParity, public MQwSubsystemCloneable<QwBeamMod> {
 
  private:

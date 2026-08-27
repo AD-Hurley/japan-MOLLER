@@ -27,6 +27,7 @@
 #include "QwLinearDiodeArray.h"
 #include "VQwClock.h"
 #include "QwBeamDetectorID.h"
+#include "QwBeamMod.h"
 
 
 /**
