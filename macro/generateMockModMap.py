@@ -29,7 +29,7 @@ fileOut.write("bmodtargetresponse,\tbmod_trim6,\t0.200,\t-1.10,\t0.100,\t0.60,\t
 fileOut.write("bmodtargetresponse,\tbmod_trim7,\t0.600,\t0.050,\t0.300,\t0.05,\t0.000\n")
 fileOut.write("\n")
 
-fileOut.write("!stripline transfer matrices from RamRM_IMOLLER_to_IPM1C01.txt\n")
+fileOut.write("!reverse transfer matrices from RamRM_IMOLLER_to_IPM1C01.txt\n")
 fileOut.write("!parameter_type,\tdevice_name,\trow_num, \tcxx,\tcxxp,\tcxy,\tcxyp,\tcxe,\tcyx,\tcyxp,\tcyy,\tcyyp,\tcye\n")
 with open("RanTM_IMOLLER_to_IPM1C01.txt", "r") as f:
     for line in f:
@@ -48,3 +48,23 @@ with open("RanTM_IMOLLER_to_IPM1C01.txt", "r") as f:
             for i in range(7):
                 rowData[1][i] = tokens[i]
             fileOut.write("bpmtransfermatrix,\t"+bpmName+',\t'+rowData[1][0][:-1]+',\t'+rowData[1][1]+',\t'+rowData[1][2]+',\t'+rowData[1][3]+',\t'+rowData[1][4]+',\t'+rowData[1][6]+'\n')
+fileOut.write("\n")
+fileOut.write("!Forward Transport Matrices from BeamMod_at_Target.txt\n")
+fileOut.write("!parameter_type,\tdevice_name,\trow_num, \tcxx,\tcxxp,\tcxy,\tcxyp,\tcxe,\tcyx,\tcyxp,\tcyy,\tcyyp,\tcye\n")
+with open("BeamMod_at_Target.txt", "r") as f:
+    for line in f:
+        tokens = line.split()
+        if line.__contains__("matrix"):
+            for token in tokens:
+                if token.__contains__("MAT"):
+                    bpmName = (token.replace("MAT", "bpm")).lower()
+                    #print(bpmName)
+        elif line.__contains__("R1"):
+            for i in range(7):
+                # print(tokens[i])
+                rowData[0][i] = tokens[i]
+            fileOut.write("bpmtransfermatrix,\t" + bpmName + ',\t' + rowData[0][0][:-1] + ',\t' + rowData[0][1] + ',\t' +rowData[0][2] + ',\t' + rowData[0][3] + ',\t' + rowData[0][4] + ',\t' + rowData[0][6] + '\n')
+        elif line.__contains__("R3"):
+            for i in range(7):
+                rowData[1][i] = tokens[i]
+            fileOut.write("bpmtransfermatrix,\t" + bpmName + ',\t' + rowData[1][0][:-1] + ',\t' + rowData[1][1] + ',\t' +rowData[1][2] + ',\t' + rowData[1][3] + ',\t' + rowData[1][4] + ',\t' + rowData[1][6] + '\n')
