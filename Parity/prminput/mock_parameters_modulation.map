@@ -1,17 +1,8 @@
 !modulation control parameters
-!parameter_type,	bmodWinPerPeriod,	bmodPeriodsPerCoil,	bmodNCoils,	bmodCyclesperSuper,	bmodIdlePerCycle, 	bmodIdlePerSuper
-!default parameters if none are provided are: 8, 50, 7, 6, 400, 800
-bmodcontrolpar, 8, 50, 7, 6, 400, 800
-
-!coil amplitude
-!device_type,	device_name,	bmmodCoilAmplitude
-!coilAmp,	coil1,	500
-!coilAmp,	coil2,	500
-!coilAmp,	coil3,	500
-!coilAmp,	coil4,	500
-!coilAmp,	coil5,	500
-!coilAmp,	coil6,	500
-!coilAmp,	coil7,	150
+!parameter_type, bmw_phase_num, bmw_max_period, nCoils, cycles/run, idle/cycle, idle/run, set-up/coil, FFB pause, FFB unpause, post-burst wait/coil
+!defaults if absent: 8, 50, 7, 6, 400, 800, 0, 0, 0, 0
+!slot = 20+400+20 = 440; cycle = 40+7*440+40+150 = 3310; run = 6*3310+140 = 20000
+bmodcontrolpar, 8, 50, 7, 6, 150, 140, 20, 40, 40, 20
 
 
 !coil amplitude and kick direction
@@ -23,16 +14,7 @@ coilAmp,	coil4,	500,	0.0,	1.0	!MAT1C08V
 coilAmp,	coil5,	500,	1.0,	0.0	!MAT1C10H
 coilAmp,	coil6,	500,	0.0,	1.0	!MAT1C10V
 coilAmp,	coil7,	150,	0.0,	0.0	!SL20, energy only
-
-
-
-!bmodtargetresponse,	bmod_trim1,	-2.413997735939606e+01,	+9.265433560543300e-01,	+0.000000000000000e+00,	+0.000000000000000e+00,	0.000	!MAT1C02H
-!bmodtargetresponse,	bmod_trim2,	+0.000000000000000e+00,	+0.000000000000000e+00,	+1.378911384933776e+01,	-1.633517179121604e+00,	0.000	!MAT1C03V
-!bmodtargetresponse,	bmod_trim3,	+2.197364719808044e+01,	-8.486349304057254e-01,	+0.000000000000000e+00,	+0.000000000000000e+00,	0.000	!MAT1C08H
-!bmodtargetresponse,	bmod_trim4,	+0.000000000000000e+00,	+0.000000000000000e+00,	-6.232174750070635e+00,	+4.585060714084140e-01,	0.000	!MAT1C08V
-!bmodtargetresponse,	bmod_trim5,	+8.687390795666319e+00,	+1.377732746037578e-01,	+0.000000000000000e+00,	+0.000000000000000e+00,	0.000	!MAT1C10H
-!bmodtargetresponse,	bmod_trim6,	+0.000000000000000e+00,	+0.000000000000000e+00,	-1.576110338189240e+01,	-4.975810411415681e-01,	0.000	!MAT1C10V
-!bmodtargetresponse,	bmod_trim7,	+0.000000000000000e+00,	+0.000000000000000e+00,	+0.000000000000000e+00,	+0.000000000000000e+00,	1.000	!energy (need to check) 
+ 
 
 
 !bmodtargetresponse,	target_dispersion,	+3.598575355940656e-01,	-3.318593277967227e-02,	-7.749892843676043e-03,	+1.097506756899557e-05,	0.000	!MAT1C01H col 6
@@ -58,7 +40,7 @@ bpmtransfermatrix,	target_dispersion,	X,	+3.598575355940656e-01,	-3.318593277967
 
 
 
-!stripline transfer matrices from RamRM_IMOLLER_to_IPM1C01.txt
+!reverse matrices target -> stripline, from RamRM_IMOLLER_to_IPM1C01.txt
 !parameter_type,	device_name,	row_num (R1=X, R3=Y), 	cxx,	cxxp,	cxy,	cxyp,	cxe,	cyx,	cyxp,	cyy,	cyyp,	cye
 bpmtransfermatrix,	bpm1h14,	X,	+1.000000000000000e+00,	+2.104840000000000e+00,	+0.000000000000000e+00,	+0.000000000000000e+00,	+0.000000000000000e+00
 bpmtransfermatrix,	bpm1h14,	Y,	+0.000000000000000e+00,	+0.000000000000000e+00,	+1.000000000000000e+00,	+2.104840000000000e+00,	+0.000000000000000e+00

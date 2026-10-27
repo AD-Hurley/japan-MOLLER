@@ -36,22 +36,22 @@
 
 //*****************************************************************
 void QwBPMTansferMatrix::SetElementName(TString bpmName){
-	this->name = bpmName;
+	this->fName = bpmName;
 }
 
 void QwBPMTansferMatrix::SetTMatrixElement(Int_t row, Int_t col, Double_t value){
 	if(row >= 0 && row < 2 && col >= 0 && col < 5){
-		this->TMatrixElement[row][col] = value;
+		this->fTMatrixElement[row][col] = value;
 		this->fFilled = kTRUE;
 	}
 }
 
 TString QwBPMTansferMatrix::GetElementName(){
-	return name;
+	return fName;
 }
 
 Double_t QwBPMTansferMatrix::GetTMatrixElement(Int_t row, Int_t col){
-	return TMatrixElement[row][col];
+	return fTMatrixElement[row][col];
 }
 
 void QwBPMTansferMatrix::LoadMockDataParameters(){
@@ -61,7 +61,7 @@ void QwBPMTansferMatrix::LoadMockDataParameters(){
   Bool_t   ldebug=kFALSE;
   TString  devname, devtype, rownum;
   Int_t    lineread=0;
-	//Double_t TransferMatrixElements[2] = {0,0};
+  
 
   if(ldebug) std::cout << "QwBPMTansferMatrix::LoadMockDataParameters(" << mapfile << ") \n" << std::endl;
 
@@ -478,6 +478,8 @@ Int_t QwBeamMod::ProcessEvBuffer(const ROCID_t roc_id, const BankID_t bank_id, U
   Bool_t lkDEBUG=kFALSE;
 
   Int_t index = GetSubbankIndex(roc_id,bank_id);
+  
+  //std::cout<< roc_id << " " << bank_id << " " << index << std::endl;
 
 
   if (index>=0 && num_words>0){

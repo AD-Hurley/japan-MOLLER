@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <cmath>
 #include "TMath.h"
+#include "QwUnits.h"
+#include "QwOptions.h"          // gQwOptions: run number for bmwcycnum
 
 #ifdef HAS_RNTUPLE_SUPPORT
 // ROOT headers for RNTuple support
@@ -792,9 +794,11 @@ void QwBeamLine::LoadMockDataParameters(TString mapfile) {
   }
   
    //  control parameters, with the documented defaults if the record is missing from the map
-   fBmodControlPar.assign(6, 0);
+   fBmodControlPar.assign(10, 0);
    fBmodControlPar[0] = 8;   fBmodControlPar[1] = 50;   fBmodControlPar[2] = 7;
-   fBmodControlPar[3] = 6;   fBmodControlPar[4] = 400;  fBmodControlPar[5] = 800;
+   fBmodControlPar[3] = 6;   fBmodControlPar[4] = 150;  fBmodControlPar[5] = 140;
+   fBmodControlPar[6] = 20;   fBmodControlPar[7] = 40;  fBmodControlPar[8] = 40;
+   fBmodControlPar[9] = 20;
    LoadBmodControlParameters("mock_parameters_modulation.map");
 
    fTrimResponse.resize(fBmodControlPar[2]);
@@ -850,17 +854,20 @@ void QwBeamLine::LoadBmodControlParameters(TString mapfile) {
       fBmodControlPar[i] = mapstr.GetTypedNextToken<Int_t>();
 
     QwMessage << "Beam modulation schedule: "
-              << fBmodControlPar[0] << " events/period, "
-              << fBmodControlPar[1] << " periods/coil, "
+              << fBmodControlPar[0] << " events/period (bmw_phase_num), "
+              << fBmodControlPar[1] << " periods/burst (bmw_max_period), "
               << fBmodControlPar[2] << " coils, "
-              << fBmodControlPar[3] << " cycles/supercycle, idle "
+              << fBmodControlPar[3] << " cycles/run, idle "
               << fBmodControlPar[4] << "/" << fBmodControlPar[5]
+              << ", set-up/FFB pause/FFB unpause/post-burst wait "
+              << fBmodControlPar[6] << "/" << fBmodControlPar[7] << "/"
+              << fBmodControlPar[8] << "/" << fBmodControlPar[9]
               << QwLog::endl;
     return;
   }
 
   QwWarning << "No bmodcontrolpar record in " << mapfile
-            << "; using defaults 8, 50, 7, 6, 400, 800" << QwLog::endl;
+            << "; using defaults 8, 50, 7, 6, 400, 800, 0, 0, 0, 0" << QwLog::endl;
 }
 //--------------------------------------------------------------------------------------------------------
 
@@ -1080,7 +1087,7 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
   static Long64_t bmodCallCounter  = -1;
   static Long64_t bmodEventCounter = -1;
   static Double_t bmodLastTime     = -1.0e300;
-  static Double_t bmodWindowPeriod = 0.0;        // seconds, measured from "time"
+  static Double_t bmodWindowPeriod = 0.0;        // JAPAN time units (Qw::ms), measured from "time"
 
   bmodCallCounter++;
 
@@ -1100,35 +1107,56 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
 
   //====================================================================
   //  MODULATION CYCLE DEFINITION
-  //       8 events        = 1 sine period      (bmodWinPerPeriod)
-  //      50 periods       = 1 coil segment     =   400 events
-  //       7 coils         = 1 driven stretch   =  2800 events
-  //    + 400 idle         = 1 full cycle       =  3200 events
-  //       6 cycles                             = 19200 events
-  //    + 800 idle tail    = 1 SUPERCYCLE       = 20000 events
+   //  CYCLE = one bmwcycnum:
+  //    [FFB pause 40]                                     
+  //    7 x coil SLOT (440):                               
+  //       [setup 20: load drive coil 10 | load ramp 10]   
+  //            last setup event: BMW_OBJ set, ARM_TRIG    
+  //       [FG burst 400 = 50 periods x 8 events]          
+  //            first burst event: trigger sent            
+  //       [post-burst wait 20]                            
+  //    [FFB unpause 40]                                   
+  //    [idle 150]                                         
+  //  RUN (bmodSuperCycle) = 6 cycles + 140 idle = 20000 events
+  //  mock_parameters_modulation.map contains these numbers
   //====================================================================
 
-  static const Int_t bmodWinPerPeriod    = fBmodControlPar[0];     // events per sine period
-  static const Int_t bmodPeriodsPerCoil  = fBmodControlPar[1];     // = BMWmax_period
-  static const Int_t bmodNCoils          = fBmodControlPar[2];     // bmod_trim1 .. bmod_trim7
-  static const Int_t bmodCyclesPerSuper  = fBmodControlPar[3];     // rows in the PREX grid plot
-  static const Int_t bmodIdlePerCycle    = fBmodControlPar[4];     //   400
-  static const Int_t bmodIdlePerSuper    = fBmodControlPar[5];     //   800
+  const Int_t bmodWinPerPeriod    = fBmodControlPar[0];     // bmw_phase_num: events per sine period
+  const Int_t bmodPeriodsPerCoil  = fBmodControlPar[1];     // = BMWmax_period
+  const Int_t bmodNCoils          = fBmodControlPar[2];     // bmod_trim1 .. bmod_trim7
+  const Int_t bmodCyclesPerSuper  = fBmodControlPar[3];     // cycles per run
+  const Int_t bmodIdlePerCycle    = fBmodControlPar[4];     // idle after each loop
+  const Int_t bmodIdlePerSuper    = fBmodControlPar[5];      // idle at end of run
+  const Int_t bmodSetup           = fBmodControlPar[6];     // coil + ramp set-up per coil
+  const Int_t bmodFFBPause        = fBmodControlPar[7];     // FFBPause, once per loop
+  const Int_t bmodFFBUnpause      = fBmodControlPar[8];     // FFBUnpause, once per loop
+  const Int_t bmodPostWait        = fBmodControlPar[9];     // after the burst, per coil
 
-  static const Int_t bmodWinPerCoil      = bmodWinPerPeriod * bmodPeriodsPerCoil;   //   400
-  static const Int_t bmodDrivenPerCycle  = bmodNCoils * bmodWinPerCoil;             //  2800
-  
-  static const Int_t bmodWinPerCycle     = bmodDrivenPerCycle + bmodIdlePerCycle;   //  3200
-  
-  static const Int_t bmodSuperCycle      = bmodCyclesPerSuper * bmodWinPerCycle
-                                         + bmodIdlePerSuper;                        // 20000
+  const Int_t bmodWinPerCoil     = bmodWinPerPeriod * bmodPeriodsPerCoil;   // 400: FG burst length
+  const Int_t bmodWinPerSlot     = bmodSetup + bmodWinPerCoil + bmodPostWait; // 440: one coil
+  const Int_t bmodDrivenPerCycle = bmodFFBPause + bmodNCoils * bmodWinPerSlot
+                                        + bmodFFBUnpause;                         // 3160: FFB paused
+  const Int_t bmodWinPerCycle    = bmodDrivenPerCycle + bmodIdlePerCycle;   // 3310
+  const Int_t bmodSuperCycle     = bmodCyclesPerSuper * bmodWinPerCycle
+                                        + bmodIdlePerSuper;                       // 20000
 
+  const Bool_t bmodCountFullLastPeriod = kFALSE;
+  const Int_t  bmodLastCountedEvent = bmodCountFullLastPeriod
+                      ? bmodWinPerCoil - 1                               // 399
+                      : (bmodPeriodsPerCoil - 1) * bmodWinPerPeriod;      // 392
+ 
+  const Int_t  bmodRampChannel = bmodNCoils + 1;   // BMW_COIL2: FG channel of the ramp (placeholder: 8)
+  
+  //  One run = one supercycle: run R starts at event (R-1)*bmodSuperCycle,
+  static const Int_t    bmodFirstRun    = gQwOptions.GetIntValuePairFirst("run");
+  const Long64_t bmodEventOffset =
+      static_cast<Long64_t>(bmodFirstRun > 0 ? bmodFirstRun - 1 : 0) * bmodSuperCycle;
   // --- drive amplitude per coil, ADC counts ---------------------------
   const std::vector<Double_t>& bmodCoilAmp = fBmodCoilAmp;
 
   // --- how each coil moves the beam -----------------------------------
   
-  static const Double_t bmodSlopeScale    = 5.0e-6;   // slope per ADC count
+  static const Double_t bmodSlopeScale    = 5.0e-6;   // mrad per ADC count, x & y use the same scale
   static const Double_t bmodEnergyScale   = 1.0e-7;   // dE/E per ADC count
   static const Double_t bmodDispersionUnit = 1000.0;   // m -> mm, rad -> mrad, column 6
  
@@ -1140,23 +1168,36 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
 
 
   //====================================================================
-  //  Three nested divisions: supercycle -> cycle -> coil -> phase.
+  //  Three nested divisions: run (supercycle) -> cycle -> coil slot -> sine phase step.
   //====================================================================
 
-  const Int_t bmodWinInSuper = static_cast<Int_t>(bmodEventCounter % bmodSuperCycle);
+  const Long64_t bmodEvent      = bmodEventOffset + bmodEventCounter;   // run offset, see above
+  const Int_t bmodWinInSuper = static_cast<Int_t>(bmodEvent % bmodSuperCycle);
 
-  Bool_t bmodIsOn       = kFALSE;   // is anything modulating this event
-  Int_t  bmodCoil       = -1;       // 0..6 internally, 1..7 in bmwobj
-  Int_t  bmodPhaseStep  = 0;        // 0..7 within the sine period
+  Bool_t bmodFFBPaused   = kFALSE;  // FFB pause flag set
+  Bool_t bmodIsOn       = kFALSE;   // FG burst running: coil and ramp are driven
+  Bool_t bmodTrigger    = kFALSE;   // the event the trigger is sent
+  Int_t  bmodCoil       = -1;       // coil of this slot, 0..6 (-1 outside the slots)
+  Int_t  bmodSlotPos    = -1;       // event within the slot, 0..439 (-1 outside)
+  Int_t  bmodPhaseStep  = 0;        // sine step of the FG output, 0..7
   Int_t  bmodCycleInSup = -1;       // 0..5
 
   if (bmodWinInSuper < bmodCyclesPerSuper * bmodWinPerCycle) {
-    bmodCycleInSup = bmodWinInSuper / bmodWinPerCycle;             // which of the 6
-    const Int_t winInCycle = bmodWinInSuper % bmodWinPerCycle;     // 0..3199
-    if (winInCycle < bmodDrivenPerCycle) {                         // not the 400 idle
-      bmodIsOn      = kTRUE;
-      bmodCoil      = winInCycle / bmodWinPerCoil;                 // 0..6
-      bmodPhaseStep = winInCycle % bmodWinPerPeriod;               // 0..7
+    bmodCycleInSup = bmodWinInSuper / bmodWinPerCycle;              // which of the 6
+    const Int_t winInCycle = bmodWinInSuper % bmodWinPerCycle;      // 0..3309
+    if (winInCycle < bmodDrivenPerCycle) {                          // FFB pause ... FFB unpause
+      bmodFFBPaused = kTRUE;
+      const Int_t w = winInCycle - bmodFFBPause;                    // event after the FFB pause
+      if (w >= 0 && w < bmodNCoils * bmodWinPerSlot) {              // inside a coil slot
+        bmodCoil    = w / bmodWinPerSlot;                           // 0..6
+        bmodSlotPos = w % bmodWinPerSlot;                           // 0..439
+        const Int_t b = bmodSlotPos - bmodSetup;                    // burst event, 0 = trigger
+        if (b >= 0 && b < bmodWinPerCoil) {
+          bmodIsOn      = kTRUE;
+          bmodTrigger   = (b == 0);
+          bmodPhaseStep = b % bmodWinPerPeriod;
+        }
+      }
     }
   }
  
@@ -1169,15 +1210,15 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
   }
 
   const Long64_t bmodCycleNumber =
-      (bmodEventCounter / bmodSuperCycle) * bmodCyclesPerSuper
+      (bmodEvent / bmodSuperCycle) * bmodCyclesPerSuper
     + bmodCycleForCount + 1;
 
   static Bool_t bmodPrintedTiming = kFALSE;
   if (!bmodPrintedTiming && bmodWindowPeriod > 0.0) {
-    std::cout << "[bmod] window period = " << bmodWindowPeriod << " s ("
-              << 1.0/bmodWindowPeriod << " Hz helicity rate)\n"
+    std::cout << "[bmod] window period = " << bmodWindowPeriod/Qw::sec << " s ("
+              <<  Qw::sec/bmodWindowPeriod << " Hz helicity rate)\n"
               << "[bmod] " << bmodWinPerPeriod << " events/period => modulation at "
-              << 1.0/(bmodWinPerPeriod*bmodWindowPeriod) << " Hz\n"
+              <<  Qw::sec/(bmodWinPerPeriod*bmodWindowPeriod) << " Hz\n"
               << "[bmod] " << bmodWinPerCoil     << " events/coil, "
                            << bmodWinPerCycle    << " events/cycle, "
                            << bmodCyclesPerSuper << " cycles/supercycle, "
@@ -1185,12 +1226,10 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
               << std::endl;
     bmodPrintedTiming = kTRUE;
   }
-
-
   
-  Double_t bmodTrimValue[bmodNCoils];
-  for (Int_t c = 0; c < bmodNCoils; c++) bmodTrimValue[c] = bmodTrimParked;
 
+  std::vector<Double_t> bmodTrimValue(bmodNCoils, bmodTrimParked);
+  
   Double_t bmodRampValue = bmodRampParked;
   Double_t bmodSine      = 0.0;    // -1 .. +1
   Double_t bmodDrive     = 0.0;    // ADC counts of deviation on the driven coil
@@ -1216,60 +1255,51 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
 
 
   //====================================================================
-  //  THE ELEVEN BMW FLAG WORDS
-  //  bmwobj / bmwcoil1 / bmwamp1 hold the LAST-moved coil through idle
-  //  gaps, matching the PREX "last-moved object" convention.
+  //  BEAM MODULATION FLAG WORDS 
+  //  (written to ROC 1 / bank 0x41 in EncodeEventData,
+  //  decoded by QwBeamMod via mock_moller_beammod.map).
   //====================================================================
+ 
+  //  Position in the slot: b = burst event (b = 0 is the trigger event,
+  //  b = -1 is the last set-up event, where BMW_OBJ is set and armed).
+  const Bool_t bmodInSlot = (bmodSlotPos >= 0);
+  const Int_t  b          = bmodSlotPos - bmodSetup;
+ 
+  //  CRL counting: from the trigger to bmodLastCountedEvent
+  const Bool_t bmodCounting = bmodInSlot && b >= 0 && b <= bmodLastCountedEvent;
+  //  BMW_OBJ: set at (arm event), reset by the CRL with the counters
+  const Bool_t bmodObjSet   = bmodInSlot && b >= -1 && b <= bmodLastCountedEvent;
+  //  BMW_COIL1: set at (after the drive channel is loaded),
+  //  set to -1 at (last event of the slot)
+  const Bool_t bmodCoil1Set = bmodInSlot && bmodSlotPos >= bmodSetup / 2
+                                         && bmodSlotPos <  bmodWinPerSlot - 1;
+  //  BMW_COIL2: set at (after the ramp channel is loaded), -1 at (last event of the slot)
+  const Bool_t bmodCoil2Set = bmodInSlot && bmodSlotPos >= bmodSetup - 1
+                                         && bmodSlotPos <  bmodWinPerSlot - 1;
+  
+  
+  static Double_t bmwLastAmp1  = 0.0;
+  static Double_t bmwLastAmp2  = 0.0;
+  if (bmodCoil1Set) bmwLastAmp1 = bmodCoilAmp[bmodCoil];
+  if (bmodCoil2Set) bmwLastAmp2 = bmodRampSpan;
 
-  static Int_t    bmwLastCoil = 0;      // 1..7
-  static Double_t bmwLastAmp  = 0.0;
-
-  if (bmodIsOn) {
-    bmwLastCoil = bmodCoil + 1;
-    bmwLastAmp  = bmodCoilAmp[bmodCoil];
-  }
-
-  static const Int_t bmodNFlagWords = 11;
-  static const TString bmwName[bmodNFlagWords] = {
-    "bmwphase", "bmwperiod", "bmwobj",  "bmwfreq",      "bmwcycnum",
-    "bmwcoil1", "bmwamp1",   "bmwcoil2","bmwamp2",
-    "bmwmax_period", "bmwffb_pause"
-  };
-
-  Double_t bmwValue[bmodNFlagWords];
-
-  // bmwphase: where in the sine this event sits
-  if (bmodIsOn) {
-    bmwValue[0] = bmodPhaseStep;
-  } else {
-    bmwValue[0] = 0;
-  }
-
-  bmwValue[1]  = bmodWinPerPeriod;                                 // bmwperiod
-  bmwValue[2]  = bmwLastCoil;                                      // bmwobj  = coil 1..7
-
-  // bmwfreq: modulation frequency in Hz, once the window period is known
-  if (bmodWindowPeriod > 0.0) {
-    bmwValue[3] = 1.0 / (bmodWinPerPeriod * bmodWindowPeriod);
-  } else {
-    bmwValue[3] = 0.0;
-  }
-
-  bmwValue[4]  = static_cast<Double_t>(bmodCycleNumber);           // bmwcycnum = CYCLE
-  bmwValue[5]  = bmwLastCoil;                                      // bmwcoil1
-  bmwValue[6]  = bmwLastAmp;                                       // bmwamp1
-  bmwValue[7]  = 0;                                                // bmwcoil2 (one coil at a time)
-  bmwValue[8]  = 0;                                                // bmwamp2
-  bmwValue[9]  = bmodPeriodsPerCoil;                               // bmwmax_period
-
-  // bmwffb_pause: 1 while modulating, 0 otherwise
-  if (bmodIsOn) {
-    bmwValue[10] = 1;
-  } else {
-    bmwValue[10] = 0;
-  }
-
-
+ 
+  const Double_t bmodWindowSec = bmodWindowPeriod / Qw::sec;     // JAPAN time unit -> s
+ 
+  bmwValue[0]  = bmodTrigger ? 1.0 : 0.0;                            // bmod_trig
+  bmwValue[1]  = TMath::Nint(4.0e6 * bmodWindowSec);              // bmod_4mhz: 4 MHz counts per window
+  bmwValue[2]  = bmodCounting ? (b % bmodWinPerPeriod) + 1 : -1;         // bmwphase        1..8, -1 when not counting
+  bmwValue[3]  = bmodCounting ? (b / bmodWinPerPeriod) + 1 : 0;          // bmwperiod       1..50, 0 when not counting
+  bmwValue[4]  = bmodObjSet ? (bmodCoil + 1) : -1;           // bmwobj          coil 1..7 while driven, else -1
+  bmwValue[5]  = (bmodWindowSec > 0.0)                     // bmwfreq         Hz
+               ? TMath::Nint(1.0 / (bmodWinPerPeriod * bmodWindowSec)) : 0;
+  bmwValue[6]  = static_cast<Double_t>(bmodCycleNumber);   // bmwcycnum   run number*6, +1, ...
+  bmwValue[7]  = bmodCoil1Set ? (bmodCoil + 1) : -1;                     // bmwcoil1        drive coil 1..7, else -1
+  bmwValue[8]  = TMath::Nint(bmwLastAmp1);                               // bmwamp1         drive amplitude, held
+  bmwValue[9]  = bmodCoil2Set ? bmodRampChannel : -1;                    // bmwcoil2        ramp channel (8), else -1
+  bmwValue[10] = TMath::Nint(bmwLastAmp2);                               // bmwamp2         ramp amplitude (1360), held
+  bmwValue[11] = bmodPeriodsPerCoil;                                     // bmw_max_period  50
+  bmwValue[12] = bmodFFBPaused ? 1 : 0;                                  // bmw_ffb_pause   1 from FFB pause to FFB unpause
   //====================================================================
   //  STRIPLINES AND CAVITIES        
   //====================================================================
@@ -1302,14 +1332,7 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
         }
       }
     }
-    else if (bmodName.BeginsWith("bmw")) {
-      for (Int_t w = 0; w < bmodNFlagWords; w++) {
-        if (bmodName == bmwName[w]) {
-          fBCM[i].get()->SetRandomEventParameters(bmwValue[w], 0.0);  // flags carry no jitter
-          break;
-        }
-      }
-    }
+   
 
     fBCM[i].get()->RandomizeEventData(helicity, time);
   }
@@ -1349,10 +1372,12 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
     kickE  = fTrimResponse[bmodCoil].GetTMatrixElement(0, 4) * bmodDrive * bmodEnergyScale;
   }
  
-  //  dE/E = SL20 modulation (trim7, set on line 1334) + energy jitter
-  for (size_t i = 0; i < fECalculator.size(); i++)
+  //  dE/E = energy jitter (randomized energy calculator) + SL20 modulation (kickE from trim7, computed above). 
+  //  The sum is read back into kickE and used for dispersion below.
+  for (size_t i = 0; i < fECalculator.size(); i++){
     fECalculator[i].RandomizeEventData(helicity, time);
- 
+    fECalculator[i].AddMockOffset(1, kickE);
+ }
   if (!fECalculator.empty())
     kickE = fECalculator[0].GetEnergy()->GetValue();
  
@@ -1360,28 +1385,26 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
  
     fBPMCombo[i].get()->RandomizeEventData(helicity, time);
  
-    //if (bmodIsOn) {
-      fBPMCombo[i].get()->addMockOffset(1, kickX);    // -> fAbsPos[0], x
-      fBPMCombo[i].get()->addMockOffset(2, kickY);    // -> fAbsPos[1], y
-      fBPMCombo[i].get()->addMockOffset(3, kickXp);   // -> fSlope[0],  x'
-      fBPMCombo[i].get()->addMockOffset(4, kickYp);   // -> fSlope[1],  y'
+    
+      fBPMCombo[i].get()->AddMockOffset(1, kickX);    // -> fAbsPos[0], x
+      fBPMCombo[i].get()->AddMockOffset(2, kickY);    // -> fAbsPos[1], y
+      fBPMCombo[i].get()->AddMockOffset(3, kickXp);   // -> fSlope[0],  x'
+      fBPMCombo[i].get()->AddMockOffset(4, kickYp);   // -> fSlope[1],  y'
       
       
       //  energy offset through the MAT1C01H dispersion, every event
-      fBPMCombo[i].get()->addMockOffset(1, fBmodDispersion.GetTMatrixElement(0, 0) * kickE * bmodDispersionUnit);
-      fBPMCombo[i].get()->addMockOffset(3, fBmodDispersion.GetTMatrixElement(0, 1) * kickE * bmodDispersionUnit);
-      fBPMCombo[i].get()->addMockOffset(2, fBmodDispersion.GetTMatrixElement(0, 2) * kickE * bmodDispersionUnit);
-      fBPMCombo[i].get()->addMockOffset(4, fBmodDispersion.GetTMatrixElement(0, 3) * kickE * bmodDispersionUnit);
+      fBPMCombo[i].get()->AddMockOffset(1, fBmodDispersion.GetTMatrixElement(0, 0) * kickE * bmodDispersionUnit);
+      fBPMCombo[i].get()->AddMockOffset(3, fBmodDispersion.GetTMatrixElement(0, 1) * kickE * bmodDispersionUnit);
+      fBPMCombo[i].get()->AddMockOffset(2, fBmodDispersion.GetTMatrixElement(0, 2) * kickE * bmodDispersionUnit);
+      fBPMCombo[i].get()->AddMockOffset(4, fBmodDispersion.GetTMatrixElement(0, 3) * kickE * bmodDispersionUnit);
       
-      fBPMCombo[i].get()->reCalcIntercept();
-    //}
+      fBPMCombo[i].get()->ReCalcIntercept();
   }
  
    //  ===== INDIVIDUAL BPMs: START =====
-  //  Comment out everything down to "INDIVIDUAL BPMs: END" to leave the
-  //  combined BPM and energy calculator behaving exactly as they do now,
-  //  with the striplines carrying only their own randomized values.
-  
+   //  Sets every stripline's X,Y from the (randomized + kicked) target vector 
+   //  through the REVERSE matrix (target -> BPM, bpmtransfermatrix rows).
+   //  The kick reaches the striplines; the analyzer then rebuilds bpm_target from them.
   
     //  full target vector: randomized beam + trim kick
     Double_t targetX = 0.0, targetXp = 0.0, targetY = 0.0, targetYp = 0.0;
@@ -1409,14 +1432,14 @@ void QwBeamLine::RandomizeEventData(int helicity, double time)
                             + fBPMTransfer[i].GetTMatrixElement(1, 3) * targetYp
                             + fBPMTransfer[i].GetTMatrixElement(1, 4) * kickE * bmodDispersionUnit;
  
-      fStripline[i].get()->setMockValue(1, bpmX);
-      fStripline[i].get()->setMockValue(2, bpmY);
+      fStripline[i].get()->SetMockValue(1, bpmX);
+      fStripline[i].get()->SetMockValue(2, bpmY);
       fStripline[i].get()->ApplyResolutionSmearing();
       fStripline[i].get()->FillRawEventData();
     }
-  //}
   //  ===== INDIVIDUAL BPMs: END =====
 }
+
 //*****************************************************************//
 /**
  * Serialize active element buffers into a CODA-style bank/subbank layout and
@@ -1466,6 +1489,32 @@ void QwBeamLine::EncodeEventData(std::vector<UInt_t> &buffer)
     buffer.insert(buffer.end(), rocheader.begin(), rocheader.end());
     buffer.insert(buffer.end(), subbankheader.begin(), subbankheader.end());
     buffer.insert(buffer.end(), elements.begin(), elements.end());
+    
+    //size_t temp_index = buffer.size();
+    
+    
+    // setting up beam modulation control words; rocID=1 & bankID=4; 11 control words
+    // everything is hardcoded & is decoded inside modulation class
+    const UInt_t bmodFlagROC  = 1;
+    const UInt_t bmodFlagBank = 0x41;     // bank tags <= 64 are read as ROC ids
+    subbankheader.clear();
+    subbankheader.push_back(bmodNFlagWords + 1);	// subbank size
+    subbankheader.push_back((bmodFlagBank << 16) | (0x01 << 8) | (1 & 0xff));
+    rocheader.clear();
+    rocheader.push_back(subbankheader.size() + bmodNFlagWords + 1);	// bank/roc size
+    rocheader.push_back((bmodFlagROC << 16) | (0x10 << 8) | (1 & 0xff));
+    buffer.insert(buffer.end(), rocheader.begin(), rocheader.end());
+    buffer.insert(buffer.end(), subbankheader.begin(), subbankheader.end());
+    //std::cout << " "<<std::endl;
+    for (int i=0; i< bmodNFlagWords; i++){
+    	//std::cout<< bmwValue[i] << " " ;
+    	buffer.push_back(bmwValue[i]);
+    	}
+    /*std::cout << std::endl;
+    for (int i=temp_index; i<buffer.size(); i++){
+    	std::cout<< std::hex <<buffer[i]<< " "; 
+    } */
+    //std::cout<< std::dec <<std::endl;
   }
 }
 

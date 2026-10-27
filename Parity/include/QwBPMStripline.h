@@ -133,7 +133,7 @@ class QwBPMStripline : public VQwBPM {
   void    SetRandomEventParameters(Double_t meanX, Double_t sigmaX, Double_t meanY, Double_t sigmaY) override;
   void    RandomizeEventData(int helicity = 0, double time = 0.0) override;
   
-  void    addMockOffset(int index, double offset) override {
+  void    AddMockOffset(int index, double offset) override {
     if (index == 1) {
       fAbsPos[0].AddChannelOffset(offset);
     } else if (index == 2) {
@@ -141,7 +141,7 @@ class QwBPMStripline : public VQwBPM {
     }
   };
   
-  void    setMockValue(int index, double value) override {
+  void    SetMockValue(int index, double value) override {
     if (index == 1) {
       fAbsPos[0].ClearEventData();
       fAbsPos[0].AddChannelOffset(value);
