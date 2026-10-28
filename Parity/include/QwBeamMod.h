@@ -123,6 +123,8 @@ class QwModChannelID
  * Decodes modulation ramp and pattern words, maintains channels affected
  * by modulation, and computes relevant summaries for regression.
  */
+
+ 
 class QwBeamMod: public VQwSubsystemParity, public MQwSubsystemCloneable<QwBeamMod> {
 
  private:
