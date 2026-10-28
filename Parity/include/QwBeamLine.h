@@ -56,7 +56,6 @@ class QwBeamLine : public VQwSubsystemParity, public MQwSubsystemCloneable<QwBea
   QwBeamLine(const QwBeamLine& source)
   : VQwSubsystem(source),VQwSubsystemParity(source),
     fQPD(source.fQPD),
-    fLinearArray(source.fLinearArray),
     fCavity(source.fCavity),
     fHaloMonitor(source.fHaloMonitor),
     fECalculator(source.fECalculator),
@@ -196,7 +195,7 @@ protected:
   std::vector <VQwClock_ptr> fClock;
 
   std::vector <QwQPD> fQPD;
-  std::vector <QwLinearDiodeArray> fLinearArray;
+  std::vector <QwLinearDiodeArray_ptr> fLinearArray;
   std::vector <QwBPMCavity> fCavity;
   std::vector <QwHaloMonitor> fHaloMonitor;
 
