@@ -44,11 +44,11 @@ class QwCombinedBPM : public VQwBPM {
   /////
  public:
  
- void addMockOffset(int index, double offset){
+ void AddMockOffset(int index, double offset){
  		if (index == 1){
- 			fAbsPos[0].PrintValue();
+ 			//fAbsPos[0].PrintValue();
  			fAbsPos[0].AddChannelOffset(offset);
- 			fAbsPos[0].PrintValue();
+ 			//fAbsPos[0].PrintValue();
  		}
  		else if (index == 2){
  			fAbsPos[1].AddChannelOffset(offset);
@@ -61,7 +61,7 @@ class QwCombinedBPM : public VQwBPM {
  		}
  };
  
- void reCalcIntercept(){
+ void ReCalcIntercept(){
  	double zpos = this->GetPositionInZ();
  	static T tmp1("tmp1","derived");
  	for (size_t axis=kXAxis; axis<kNumAxes; axis++)
